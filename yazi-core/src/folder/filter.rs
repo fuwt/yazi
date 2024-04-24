@@ -1,8 +1,7 @@
 use std::{ffi::OsStr, ops::Range};
 
 use anyhow::Result;
-use regex::bytes::{Regex, RegexBuilder};
-use yazi_shared::event::Cmd;
+use regex::bytes::{Regex, RegexBuilder}; use yazi_shared::event::Cmd;
 
 use yazi_config::USER_DIC;
 
@@ -12,18 +11,49 @@ pub struct Filter {
     chars: Vec<char>,
 }
 
-
-fn get_char_vec(s: &[u8]) -> Vec<char> {
-    let mut ret: Vec<char> = Vec::new();
-    if let Ok(_str) = std::str::from_utf8(s) {
-        ret = _str.chars().collect();
-    }
-    return ret
+struct MatchResult {
+    ismatch: bool,
+    range: Option<Range<usize>>
 }
+
+
+fn table_match(needle: &Vec<char>, haystack: Vec<char>, flag:bool) -> MatchResult {
+    let needle_len = needle.len();
+    let haystack_len = haystack.len();
+    if needle_len > haystack_len { return MatchResult{ismatch:false, range:None} }
+
+    for i in 0..=(haystack_len - needle_len) {
+        let mut found = true;
+        for j in 0..needle_len {
+            if haystack[i + j] == needle[j] { continue; }
+            if let Some(value) = USER_DIC.table.get(&haystack[i+j]) {
+                if !value.contains(&needle[j]) {
+                    found = false;
+                    break;
+                }
+            } else {
+                found = false;
+                break;
+            }
+        }
+        if found {
+            if flag {
+                let start:usize = haystack[0..i].into_iter().collect::<String>().len();
+                let end:usize = haystack[0..(i + needle.len())].into_iter().collect::<String>().len();
+                return MatchResult{ismatch:true, range:Some(start..end)}
+            } else {
+                return MatchResult{ismatch:true, range:None}
+            }
+        }
+    }
+    MatchResult{ismatch:false, range:None}
+}
+
 
 impl PartialEq for Filter {
 	fn eq(&self, other: &Self) -> bool { self.raw == other.raw }
 }
+
 
 impl Filter {
 	pub fn new(s: &str, case: FilterCase) -> Result<Self> {
@@ -48,24 +78,8 @@ impl Filter {
             return false
         } else {
             let name_bytes = name.as_encoded_bytes();
-            let name_chars: Vec<char> = get_char_vec(name_bytes);
-            if self.chars.len() > name_chars.len() { return false }
-            for i in 0..=name_chars.len() - self.chars.len() {
-                let mut found = true;
-                for j in 0..self.chars.len() {
-                    if name_chars[i + j] == self.chars[j] { continue; }
-                    if let Some(value) = USER_DIC.table.get(&name_chars[i+j]) {
-                        if !value.contains(&self.chars[j]) {
-                            found = false;
-                            break;
-                        }
-                    } else {
-                        found = false;
-                        break;
-                    }
-                }
-                if found { return true}
-
+            if let Ok(s) = std::str::from_utf8(name_bytes) {
+                return table_match(&self.chars, s.chars().collect(), false).ismatch
             }
             false
         }
@@ -74,33 +88,17 @@ impl Filter {
 	#[inline]
 	pub fn highlighted(&self, name: &OsStr) -> Option<Vec<Range<usize>>> {
 		let m = self.regex.find(name.as_encoded_bytes());
-        match m {
-            Some(r) => return vec![r.range()].into(),
+        return match m {
+            Some(r) => Some(vec![r.range()]),
             None =>  {
                 let name_bytes = name.as_encoded_bytes();
-                let name_chars: Vec<char> = get_char_vec(name_bytes);
-                if self.chars.len() > name_chars.len() { return None }
-                for i in 0..=name_chars.len() - self.chars.len() {
-                    let mut found = true;
-                    for j in 0..self.chars.len() {
-                        if name_chars[i + j] == self.chars[j] { continue; }
-                        if let Some(value) = USER_DIC.table.get(&name_chars[i+j]) {
-                            if !value.contains(&self.chars[j]) {
-                                found = false;
-                                break;
-                            }
-                        } else {
-                            found = false;
-                            break;
-                        }
-                    }
-                    if found {
-                        let start:usize = name_chars[0..i].into_iter().collect::<String>().len();
-                        let end:usize = name_chars[0..(i + self.chars.len())].into_iter().collect::<String>().len();
-                        return vec![start..end].into()
-                    }
+                return match std::str::from_utf8(name_bytes) {
+                    Ok(s) => return match table_match(&self.chars, s.chars().collect(), true).range {
+                        Some(r) => Some(vec![r]),
+                        None => None
+                    },
+                    Err(_) => None
                 }
-                return None
             },
         }
 	}
