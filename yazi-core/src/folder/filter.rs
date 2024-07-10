@@ -1,4 +1,4 @@
-use std::{ffi::OsStr, ops::Range};
+use std::{ffi::OsStr, fmt::Display, ops::Range};
 
 use anyhow::Result;
 use regex::bytes::{Regex, RegexBuilder};
@@ -49,12 +49,6 @@ fn table_match(needle: &Vec<char>, haystack: Vec<char>, flag:bool) -> MatchResul
     MatchResult{ismatch:false, range:None}
 }
 
-
-impl PartialEq for Filter {
-	fn eq(&self, other: &Self) -> bool { self.raw == other.raw }
-}
-
-
 impl Filter {
 	pub fn new(s: &str, case: FilterCase) -> Result<Self> {
 		let regex = match case {
@@ -102,6 +96,14 @@ impl Filter {
             },
         }
 	}
+}
+
+impl PartialEq for Filter {
+	fn eq(&self, other: &Self) -> bool { self.raw == other.raw }
+}
+
+impl Display for Filter {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { f.write_str(&self.raw) }
 }
 
 #[derive(Default, PartialEq, Eq)]
