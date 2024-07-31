@@ -18,12 +18,31 @@ async fn main() -> anyhow::Result<()> {
 
 	match Args::parse().command {
 		Command::Pub(cmd) => {
+			yazi_boot::init_default();
 			yazi_dds::init();
 			if let Err(e) = yazi_dds::Client::shot(&cmd.kind, cmd.receiver()?, &cmd.body()?).await {
 				eprintln!("Cannot send message: {e}");
 				std::process::exit(1);
 			}
 		}
+
+		Command::PubTo(cmd) => {
+			yazi_boot::init_default();
+			yazi_dds::init();
+			if let Err(e) = yazi_dds::Client::shot(&cmd.kind, cmd.receiver, &cmd.body()?).await {
+				eprintln!("Cannot send message: {e}");
+				std::process::exit(1);
+			}
+		}
+
+		Command::Sub(cmd) => {
+			yazi_boot::init_default();
+			yazi_dds::init();
+			yazi_dds::Client::draw(cmd.kinds.split(',').collect()).await?;
+
+			tokio::signal::ctrl_c().await?;
+		}
+
 		Command::Pack(cmd) => {
 			package::init();
 			if cmd.install {
@@ -38,13 +57,6 @@ async fn main() -> anyhow::Result<()> {
 			} else if let Some(repo) = &cmd.add {
 				package::Package::add_to_config(repo).await?;
 			}
-		}
-
-		Command::Sub(cmd) => {
-			yazi_dds::init();
-			yazi_dds::Client::draw(cmd.kinds.split(',').collect()).await?;
-
-			tokio::signal::ctrl_c().await?;
 		}
 	}
 

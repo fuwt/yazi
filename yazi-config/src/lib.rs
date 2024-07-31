@@ -46,7 +46,7 @@ pub fn init() -> anyhow::Result<()> {
 	let keymap_toml = &Preset::keymap(&config_dir)?;
 	let theme_toml = &Preset::theme(&config_dir)?;
 
-	LAYOUT.with(Default::default);
+	LAYOUT.with(<_>::default);
 
   USER_DIC.init(userdic::read_user_dict(&config_dir));
 	KEYMAP.init(<_>::from_str(keymap_toml)?);
@@ -68,10 +68,11 @@ pub fn init() -> anyhow::Result<()> {
 				continue;
 			}
 			if !r.bool("confirm") && !r.bool("interactive") {
+				let s = format!("`{}` ({})", c.on(), c.desc_or_run());
 				eprintln!(
-					r#"WARNING: In Yazi v0.3, the behavior of the interactive `shell` (i.e., shell templates) must be explicitly specified with `--interactive`.
+					r#"WARNING: In Yazi v0.3, the behavior of the interactive `shell` (i.e., shell templates) must be explicitly specified with either `--interactive` or `--confirm`.
 
-Please replace e.g. `shell` with `shell --interactive`, `shell "my-template"` with `shell "my-template" --interactive`, in your keymap.toml"#
+Please replace e.g. `shell` with `shell --interactive`, `shell "my-template"` with `shell "my-template" --interactive`, in your keymap.toml for the key: {s}"#
 				);
 				return Ok(());
 			} else if r.bool("confirm") && r.bool("interactive") {

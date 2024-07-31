@@ -261,14 +261,28 @@ pub fn copy_with_progress(
 	rx
 }
 
+pub async fn remove_dir_clean(dir: &Path) {
+	let Ok(mut it) = fs::read_dir(dir).await else { return };
+
+	while let Ok(Some(entry)) = it.next_entry().await {
+		if entry.file_type().await.is_ok_and(|t| t.is_dir()) {
+			let path = entry.path();
+			Box::pin(remove_dir_clean(&path)).await;
+			fs::remove_dir(path).await.ok();
+		}
+	}
+
+	fs::remove_dir(dir).await.ok();
+}
+
 // Convert a file mode to a string representation
 #[cfg(unix)]
 #[allow(clippy::collapsible_else_if)]
-pub fn permissions(m: libc::mode_t) -> String {
+pub fn permissions(m: libc::mode_t, dummy: bool) -> String {
 	use libc::{S_IFBLK, S_IFCHR, S_IFDIR, S_IFIFO, S_IFLNK, S_IFMT, S_IFSOCK, S_IRGRP, S_IROTH, S_IRUSR, S_ISGID, S_ISUID, S_ISVTX, S_IWGRP, S_IWOTH, S_IWUSR, S_IXGRP, S_IXOTH, S_IXUSR};
 	let mut s = String::with_capacity(10);
 
-	// File type
+	// Filetype
 	s.push(match m & S_IFMT {
 		S_IFBLK => 'b',
 		S_IFCHR => 'c',
@@ -278,6 +292,11 @@ pub fn permissions(m: libc::mode_t) -> String {
 		S_IFSOCK => 's',
 		_ => '-',
 	});
+
+	if dummy {
+		s.push_str("?????????");
+		return s;
+	}
 
 	// Owner
 	s.push(if m & S_IRUSR != 0 { 'r' } else { '-' });

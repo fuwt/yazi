@@ -46,10 +46,6 @@ impl Preview {
 		let url = file.url();
 		self.go(file, MIME_DIR, force);
 
-		if matches!(&self.folder_loader, Some((u, _)) if *u == url) {
-			return;
-		}
-
 		self.folder_loader.take().map(|(_, h)| h.abort());
 		self.folder_loader = Some((
 			url.clone(),
@@ -102,12 +98,12 @@ impl Preview {
 		*url == lock.url
 			&& self.skip == lock.skip
 			&& cha.len == lock.cha.len
-			&& cha.modified == lock.cha.modified
+			&& cha.mtime == lock.cha.mtime
 			&& cha.kind == lock.cha.kind
 			&& {
 				#[cfg(unix)]
 				{
-					cha.permissions == lock.cha.permissions
+					cha.perm == lock.cha.perm
 				}
 				#[cfg(windows)]
 				{
