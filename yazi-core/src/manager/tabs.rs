@@ -1,6 +1,7 @@
 use std::ops::{Deref, DerefMut};
 
 use yazi_boot::BOOT;
+use yazi_dds::Pubsub;
 use yazi_proxy::ManagerProxy;
 use yazi_shared::fs::Url;
 
@@ -13,13 +14,18 @@ pub struct Tabs {
 
 impl Tabs {
 	pub fn make() -> Self {
-		let mut tabs = Self { cursor: 0, items: vec![Tab::default()] };
-		if let Some(file) = &BOOT.file {
-			tabs.items[0].reveal(Url::from(BOOT.cwd.join(file)));
-		} else {
-			tabs.items[0].cd(Url::from(&BOOT.cwd));
-		}
+		let mut tabs =
+			Self { cursor: 0, items: (0..BOOT.cwds.len()).map(|_| Tab::default()).collect() };
+		tabs.reorder();
 
+		for (i, tab) in tabs.iter_mut().enumerate() {
+			let file = &BOOT.files[i];
+			if file.is_empty() {
+				tab.cd(Url::from(&BOOT.cwds[i]));
+			} else {
+				tab.reveal(Url::from(BOOT.cwds[i].join(file)));
+			}
+		}
 		tabs
 	}
 
@@ -42,7 +48,7 @@ impl Tabs {
 			return;
 		}
 
-		// Reset the preview of the previous active tab
+		// Reset the preview of the last active tab
 		if let Some(active) = self.items.get_mut(self.cursor) {
 			active.preview.reset_image();
 		}
@@ -50,6 +56,7 @@ impl Tabs {
 		self.cursor = idx;
 		ManagerProxy::refresh();
 		ManagerProxy::peek(true);
+		Pubsub::pub_from_tab(idx);
 	}
 }
 
@@ -59,6 +66,20 @@ impl Tabs {
 
 	#[inline]
 	pub(super) fn active_mut(&mut self) -> &mut Tab { &mut self.items[self.cursor] }
+
+	#[inline]
+	pub fn active_or(&self, idx: Option<usize>) -> &Tab {
+		idx.and_then(|i| self.items.get(i)).unwrap_or(&self.items[self.cursor])
+	}
+
+	#[inline]
+	pub(super) fn active_or_mut(&mut self, idx: Option<usize>) -> &mut Tab {
+		if let Some(i) = idx.filter(|&i| i < self.items.len()) {
+			&mut self.items[i]
+		} else {
+			&mut self.items[self.cursor]
+		}
+	}
 }
 
 impl Deref for Tabs {

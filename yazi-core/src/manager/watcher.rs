@@ -1,17 +1,17 @@
-use std::{collections::{HashMap, HashSet}, time::{Duration, SystemTime}};
+use std::{collections::{HashMap, HashSet}, time::Duration};
 
 use anyhow::Result;
-use notify::{RecommendedWatcher, RecursiveMode, Watcher as _Watcher};
+use notify_fork::{RecommendedWatcher, RecursiveMode, Watcher as _Watcher};
 use parking_lot::RwLock;
 use tokio::{fs, pin, sync::{mpsc::{self, UnboundedReceiver}, watch}};
 use tokio_stream::{wrappers::UnboundedReceiverStream, StreamExt};
 use tracing::error;
+use yazi_fs::{Files, Folder};
 use yazi_plugin::isolate;
 use yazi_proxy::WATCHER;
-use yazi_shared::{fs::{symlink_realname, File, FilesOp, Url}, RoCell};
+use yazi_shared::{fs::{symlink_realname, Cha, File, FilesOp, Url}, RoCell};
 
 use super::Linked;
-use crate::folder::{Files, Folder};
 
 pub(crate) static WATCHED: RoCell<RwLock<HashSet<Url>>> = RoCell::new();
 pub static LINKED: RoCell<RwLock<Linked>> = RoCell::new();
@@ -28,7 +28,7 @@ impl Watcher {
 
 		let out_tx_ = out_tx.clone();
 		let watcher = RecommendedWatcher::new(
-			move |res: Result<notify::Event, notify::Error>| {
+			move |res: Result<notify_fork::Event, notify_fork::Error>| {
 				let Ok(event) = res else { return };
 				if event.kind.is_access() {
 					return;
@@ -58,21 +58,21 @@ impl Watcher {
 
 	pub(super) fn trigger_dirs(&self, folders: &[&Folder]) {
 		let todo: Vec<_> =
-			folders.iter().filter(|&f| f.cwd.is_regular()).map(|&f| (f.cwd.clone(), f.mtime)).collect();
+			folders.iter().filter(|&f| f.cwd.is_regular()).map(|&f| (f.cwd.clone(), f.cha)).collect();
 		if todo.is_empty() {
 			return;
 		}
 
-		async fn go(url: Url, mtime: Option<SystemTime>) {
-			let Some(meta) = Files::assert_stale(&url, mtime).await else { return };
+		async fn go(url: Url, cha: Cha) {
+			let Some(cha) = Files::assert_stale(&url, cha).await else { return };
 
 			if let Ok(files) = Files::from_dir_bulk(&url).await {
-				FilesOp::Full(url, files, meta.modified().ok()).emit();
+				FilesOp::Full(url, files, cha).emit();
 			}
 		}
 
 		tokio::spawn(async move {
-			futures::future::join_all(todo.into_iter().map(|(url, mtime)| go(url, mtime))).await;
+			futures::future::join_all(todo.into_iter().map(|(url, cha)| go(url, cha))).await;
 		});
 	}
 
@@ -85,7 +85,7 @@ impl Watcher {
 
 			to_unwatch.retain(|u| match watcher.unwatch(u) {
 				Ok(_) => true,
-				Err(e) if matches!(e.kind, notify::ErrorKind::WatchNotFound) => true,
+				Err(e) if matches!(e.kind, notify_fork::ErrorKind::WatchNotFound) => true,
 				Err(e) => {
 					error!("Unwatch failed: {e:?}");
 					false
@@ -111,7 +111,7 @@ impl Watcher {
 
 	async fn fan_out(rx: UnboundedReceiver<Url>) {
 		// TODO: revert this once a new notification is implemented
-		let rx = UnboundedReceiverStream::new(rx).chunks_timeout(1000, Duration::from_millis(50));
+		let rx = UnboundedReceiverStream::new(rx).chunks_timeout(1000, Duration::from_millis(100));
 		pin!(rx);
 
 		while let Some(chunk) = rx.next().await {

@@ -1,19 +1,20 @@
 use std::collections::HashMap;
 
 use yazi_config::{manager::SortBy, plugin::MAX_PREWORKERS, PLUGIN};
+use yazi_fs::Files;
 use yazi_shared::{fs::{File, Url}, MIME_DIR};
 
 use super::Tasks;
-use crate::folder::Files;
 
 impl Tasks {
 	pub fn fetch_paged(&self, paged: &[File], mimetype: &HashMap<Url, String>) {
 		let mut loaded = self.scheduler.prework.loaded.lock();
 		let mut tasks: [Vec<_>; MAX_PREWORKERS as usize] = Default::default();
 		for f in paged {
-			let mime = if f.is_dir() { Some(MIME_DIR) } else { mimetype.get(&f.url).map(|s| &**s) };
+			let mime =
+				if f.is_dir() { MIME_DIR } else { mimetype.get(&f.url).map(|s| &**s).unwrap_or_default() };
 			let factors = |s: &str| match s {
-				"mime" => mime.is_some(),
+				"mime" => !mime.is_empty(),
 				_ => false,
 			};
 
@@ -38,7 +39,8 @@ impl Tasks {
 	pub fn preload_paged(&self, paged: &[File], mimetype: &HashMap<Url, String>) {
 		let mut loaded = self.scheduler.prework.loaded.lock();
 		for f in paged {
-			let mime = if f.is_dir() { Some(MIME_DIR) } else { mimetype.get(&f.url).map(|s| &**s) };
+			let mime =
+				if f.is_dir() { MIME_DIR } else { mimetype.get(&f.url).map(|s| &**s).unwrap_or_default() };
 			for p in PLUGIN.preloaders(&f.url, mime) {
 				match loaded.get_mut(&f.url) {
 					Some(n) if *n & (1 << p.idx) != 0 => continue,

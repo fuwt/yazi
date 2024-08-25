@@ -1,29 +1,53 @@
-{ makeRustPlatform
-, rustToolchain
-, version ? "git"
-, lib
+{
+  rustPlatform,
+  version ? "git",
+  rev ? "unknown",
+  date ? "19700101",
+  lib,
 
-, installShellFiles
-, stdenv
-, darwin
+  installShellFiles,
+  stdenv,
+  darwin,
+  rust-jemalloc-sys,
 
-, imagemagick
+  imagemagick,
 }:
-
-(makeRustPlatform { cargo = rustToolchain; rustc = rustToolchain; }).buildRustPackage rec {
+let
+  src = lib.fileset.toSource {
+    root = ../.;
+    fileset = lib.fileset.unions [
+      ../assets
+      ../Cargo.toml
+      ../Cargo.lock
+      (lib.fileset.fromSource (lib.sources.sourceByRegex ../. [ "^yazi-.*" ]))
+    ];
+  };
+in
+rustPlatform.buildRustPackage rec {
   pname = "yazi";
-  inherit version;
+  inherit version src;
 
-  src = ../.;
+  cargoLock = {
+    lockFile = "${src}/Cargo.lock";
+    # outputHashes = {
+    #   "notify-6.1.1" = "sha256-5Ft2yvRPi2EaErcGBkF/3Xv6K7ijFGbdjmSqI4go/h4=";
+    # };
+  };
 
-  cargoLock.lockFile = ../Cargo.lock;
+  env = {
+    YAZI_GEN_COMPLETIONS = true;
+    VERGEN_GIT_SHA = rev;
+    VERGEN_BUILD_DATE = builtins.concatStringsSep "-" (builtins.match "(.{4})(.{2})(.{2}).*" date);
+  };
 
-  env.YAZI_GEN_COMPLETIONS = true;
+  nativeBuildInputs = [
+    installShellFiles
+    imagemagick
+  ];
 
-  nativeBuildInputs = [ installShellFiles imagemagick ];
-  buildInputs = lib.optionals stdenv.isDarwin (
-    with darwin.apple_sdk.frameworks; [ Foundation ]
-  );
+  buildInputs = [
+    rust-jemalloc-sys
+  ] ++ lib.optionals stdenv.isDarwin (with darwin.apple_sdk.frameworks; [ Foundation ]);
 
   postInstall = ''
     installShellCompletion --cmd yazi \
@@ -41,10 +65,10 @@
     install -m644 assets/yazi.desktop $out/share/applications/
   '';
 
-  meta = with lib; {
+  meta = {
     description = "Blazing fast terminal file manager written in Rust, based on async I/O";
     homepage = "https://github.com/sxyazi/yazi";
-    license = licenses.mit;
+    license = lib.licenses.mit;
     mainProgram = "yazi";
   };
 }

@@ -1,15 +1,14 @@
 local M = {}
 
 function M:peek()
-	local cache = ya.file_cache(self)
-	if not cache then
+	local start, cache = os.clock(), ya.file_cache(self)
+	if not cache or self:preload() ~= 1 then
 		return
 	end
 
-	if self:preload() == 1 then
-		ya.image_show(cache, self.area)
-		ya.preview_widgets(self, {})
-	end
+	ya.sleep(math.max(0, PREVIEW.image_delay / 1000 + start - os.clock()))
+	ya.image_show(cache, self.area)
+	ya.preview_widgets(self, {})
 end
 
 function M:seek() end
@@ -28,6 +27,7 @@ function M:preload()
 		string.format("%dx%d^", PREVIEW.max_width, PREVIEW.max_height),
 		"-quality",
 		tostring(PREVIEW.image_quality),
+		"-auto-orient",
 		"JPG:" .. tostring(cache),
 	}):spawn()
 

@@ -2,18 +2,19 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use tokio::fs;
-use yazi_config::popup::InputCfg;
-use yazi_proxy::{InputProxy, TabProxy, WATCHER};
+use yazi_config::popup::{ConfirmCfg, InputCfg};
+use yazi_proxy::{ConfirmProxy, InputProxy, TabProxy, WATCHER};
 use yazi_shared::{event::Cmd, fs::{maybe_exists, ok_or_not_found, symlink_realpath, File, FilesOp, Url}};
 
 use crate::manager::Manager;
 
 pub struct Opt {
+	dir:   bool,
 	force: bool,
 }
 
 impl From<Cmd> for Opt {
-	fn from(c: Cmd) -> Self { Self { force: c.bool("force") } }
+	fn from(c: Cmd) -> Self { Self { dir: c.bool("dir"), force: c.bool("force") } }
 }
 
 impl Manager {
@@ -30,14 +31,14 @@ impl Manager {
 			}
 
 			let new = cwd.join(&name);
-			if !opt.force && maybe_exists(&new).await {
-				match InputProxy::show(InputCfg::overwrite()).recv().await {
-					Some(Ok(c)) if c == "y" || c == "Y" => (),
-					_ => return Ok(()),
-				}
+			if !opt.force
+				&& maybe_exists(&new).await
+				&& !ConfirmProxy::show(ConfirmCfg::overwrite(&new)).await
+			{
+				return Ok(());
 			}
 
-			Self::create_do(new, name.ends_with('/') || name.ends_with('\\')).await
+			Self::create_do(new, opt.dir || name.ends_with('/') || name.ends_with('\\')).await
 		});
 	}
 

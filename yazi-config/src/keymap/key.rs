@@ -67,9 +67,8 @@ impl FromStr for Key {
 
 		let mut key = Self::default();
 		if !s.starts_with('<') || !s.ends_with('>') {
-			let c = s.chars().next().unwrap();
-			key.code = KeyCode::Char(c);
-			key.shift = c.is_ascii_uppercase();
+			key.code = KeyCode::Char(s.chars().next().unwrap());
+			key.shift = matches!(key.code, KeyCode::Char(c) if c.is_ascii_uppercase());
 			return Ok(key);
 		}
 
@@ -108,10 +107,21 @@ impl FromStr for Key {
 				"f10" => key.code = KeyCode::F(10),
 				"f11" => key.code = KeyCode::F(11),
 				"f12" => key.code = KeyCode::F(12),
+				"f13" => key.code = KeyCode::F(13),
+				"f14" => key.code = KeyCode::F(14),
+				"f15" => key.code = KeyCode::F(15),
+				"f16" => key.code = KeyCode::F(16),
+				"f17" => key.code = KeyCode::F(17),
+				"f18" => key.code = KeyCode::F(18),
+				"f19" => key.code = KeyCode::F(19),
 				"esc" => key.code = KeyCode::Esc,
 
 				_ => match next {
-					s if it.peek().is_none() => key.code = KeyCode::Char(s.chars().next().unwrap()),
+					s if it.peek().is_none() => {
+						let c = s.chars().next().unwrap();
+						key.shift |= c.is_ascii_uppercase();
+						key.code = KeyCode::Char(if key.shift { c.to_ascii_uppercase() } else { c });
+					}
 					s => bail!("unknown key: {s}"),
 				},
 			}
@@ -127,7 +137,6 @@ impl FromStr for Key {
 impl Display for Key {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		if let Some(c) = self.plain() {
-			let c = if self.shift { c.to_ascii_uppercase() } else { c };
 			return if c == ' ' { write!(f, "<Space>") } else { f.write_char(c) };
 		}
 
@@ -172,11 +181,18 @@ impl Display for Key {
 			KeyCode::F(10) => "F10",
 			KeyCode::F(11) => "F11",
 			KeyCode::F(12) => "F12",
+			KeyCode::F(13) => "F13",
+			KeyCode::F(14) => "F14",
+			KeyCode::F(15) => "F15",
+			KeyCode::F(16) => "F16",
+			KeyCode::F(17) => "F17",
+			KeyCode::F(18) => "F18",
+			KeyCode::F(19) => "F19",
 			KeyCode::Esc => "Esc",
 
 			KeyCode::Char(' ') => "Space",
 			KeyCode::Char(c) => {
-				f.write_char(if self.shift { c.to_ascii_uppercase() } else { c })?;
+				f.write_char(c)?;
 				""
 			}
 			_ => "Unknown",

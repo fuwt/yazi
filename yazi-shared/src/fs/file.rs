@@ -25,13 +25,6 @@ impl AsRef<File> for File {
 	fn as_ref(&self) -> &File { self }
 }
 
-impl PartialEq for File {
-	#[inline]
-	fn eq(&self, other: &Self) -> bool {
-		self.cha == other.cha && self.url == other.url && self.link_to == other.link_to
-	}
-}
-
 impl File {
 	#[inline]
 	pub async fn from(url: Url) -> Result<Self> {
@@ -71,7 +64,7 @@ impl File {
 
 	#[inline]
 	pub fn from_dummy(url: Url, ft: Option<FileType>) -> Self {
-		Self { cha: ft.map_or_else(Cha::default, Cha::from), url: url.to_owned(), ..Default::default() }
+		Self { cha: ft.map_or_else(Cha::dummy, Cha::from), url: url.to_owned(), ..Default::default() }
 	}
 }
 

@@ -1,6 +1,6 @@
 [package]
 name        = "yazi-core"
-version     = "0.2.5"
+version     = "0.3.1"
 edition     = "2021"
 license     = "MIT"
 authors     = [ "sxyazi <sxyazi@gmail.com>" ]
@@ -9,38 +9,35 @@ homepage    = "https://yazi-rs.github.io"
 repository  = "https://github.com/sxyazi/yazi"
 
 [dependencies]
-yazi-adapter   = { path = "../yazi-adapter", version = "0.2.5" }
-yazi-boot      = { path = "../yazi-boot", version = "0.2.5" }
-yazi-config    = { path = "../yazi-config", version = "0.2.5" }
-yazi-dds       = { path = "../yazi-dds", version = "0.2.5" }
-yazi-plugin    = { path = "../yazi-plugin", version = "0.2.5" }
-yazi-proxy     = { path = "../yazi-proxy", version = "0.2.5" }
-yazi-scheduler = { path = "../yazi-scheduler", version = "0.2.5" }
-yazi-shared    = { path = "../yazi-shared", version = "0.2.5" }
+yazi-adapter   = { path = "../yazi-adapter", version = "0.3.1" }
+yazi-boot      = { path = "../yazi-boot", version = "0.3.1" }
+yazi-config    = { path = "../yazi-config", version = "0.3.1" }
+yazi-dds       = { path = "../yazi-dds", version = "0.3.1" }
+yazi-fs        = { path = "../yazi-fs", version = "0.3.1" }
+yazi-plugin    = { path = "../yazi-plugin", version = "0.3.1" }
+yazi-proxy     = { path = "../yazi-proxy", version = "0.3.1" }
+yazi-scheduler = { path = "../yazi-scheduler", version = "0.3.1" }
+yazi-shared    = { path = "../yazi-shared", version = "0.3.1" }
 
 # External dependencies
-anyhow        = "1.0.86"
-bitflags      = "2.6.0"
-crossterm     = "0.27.0"
-dirs          = "5.0.1"
-futures       = "0.3.30"
-notify        = { git = "https://github.com/notify-rs/notify.git", rev = "96dec74316a93bed6eec9db177b233e6e017275e", default-features = false, features = [ "macos_fsevent" ] }
-parking_lot   = "0.12.3"
-ratatui       = "0.27.0"
-regex         = "1.10.5"
-scopeguard    = "1.2.0"
-serde         = "1.0.204"
-shell-words   = "1.1.0"
-tokio         = { version = "1.39.2", features = [ "full" ] }
-tokio-stream  = "0.1.15"
-tokio-util    = "0.7.11"
-unicode-width = "0.1.13"
-
-# Logging
-tracing = { version = "0.1.40", features = [ "max_level_debug", "release_max_level_warn" ] }
+anyhow        = { workspace = true }
+bitflags      = { workspace = true }
+crossterm     = { workspace = true }
+dirs          = { workspace = true }
+futures       = { workspace = true }
+notify-fork   = { version = "6.1.1", default-features = false, features = [ "macos_fsevent" ] }
+parking_lot   = { workspace = true }
+ratatui       = { workspace = true }
+scopeguard    = { workspace = true }
+serde         = { workspace = true }
+tokio         = { workspace = true }
+tokio-stream  = { workspace = true }
+tokio-util    = { workspace = true }
+tracing       = { workspace = true }
+unicode-width = { workspace = true }
 
 [target."cfg(unix)".dependencies]
-libc = "0.2.155"
+libc = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-crossterm = { version = "0.27.0", features = [ "use-dev-tty" ] }
+crossterm = { workspace = true, features = [ "use-dev-tty" ] }

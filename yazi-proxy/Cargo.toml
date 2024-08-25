@@ -1,6 +1,6 @@
 [package]
 name        = "yazi-proxy"
-version     = "0.2.5"
+version     = "0.3.1"
 edition     = "2021"
 license     = "MIT"
 authors     = [ "sxyazi <sxyazi@gmail.com>" ]
@@ -13,10 +13,11 @@ default      = [ "vendored-lua" ]
 vendored-lua = [ "mlua/vendored" ]
 
 [dependencies]
-yazi-config = { path = "../yazi-config", version = "0.2.5" }
-yazi-shared = { path = "../yazi-shared", version = "0.2.5" }
+yazi-config = { path = "../yazi-config", version = "0.3.1" }
+yazi-shared = { path = "../yazi-shared", version = "0.3.1" }
 
 # External dependencies
-anyhow = "1.0.86"
-mlua   = { version = "0.9.9", features = [ "lua54" ] }
-tokio  = { version = "1.39.2", features = [ "full" ] }
+anyhow      = { workspace = true }
+mlua        = { workspace = true }
+shell-words = { workspace = true }
+tokio       = { workspace = true }

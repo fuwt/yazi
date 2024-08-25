@@ -7,18 +7,15 @@
 )]
 
 pub mod completion;
-pub mod folder;
+pub mod confirm;
 pub mod help;
 pub mod input;
 pub mod manager;
 pub mod notify;
 pub mod select;
-mod step;
 pub mod tab;
 pub mod tasks;
 pub mod which;
-
-pub use step::*;
 
 pub fn init() {
 	manager::WATCHED.with(<_>::default);

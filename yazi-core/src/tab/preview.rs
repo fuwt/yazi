@@ -1,14 +1,13 @@
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 use tokio::{pin, task::JoinHandle};
 use tokio_stream::{wrappers::UnboundedReceiverStream, StreamExt};
 use tokio_util::sync::CancellationToken;
 use yazi_adapter::ADAPTOR;
 use yazi_config::PLUGIN;
+use yazi_fs::Files;
 use yazi_plugin::{external::Highlighter, isolate, utils::PreviewLock};
 use yazi_shared::{fs::{Cha, File, FilesOp, Url}, MIME_DIR};
-
-use crate::folder::Files;
 
 #[derive(Default)]
 pub struct Preview {
@@ -16,12 +15,12 @@ pub struct Preview {
 	pub skip: usize,
 
 	previewer_ct:  Option<CancellationToken>,
-	folder_loader: Option<(Url, JoinHandle<()>)>,
+	folder_loader: Option<JoinHandle<()>>,
 }
 
 impl Preview {
 	pub fn go(&mut self, file: File, mime: &str, force: bool) {
-		if !force && self.content_unchanged(&file.url, &file.cha) {
+		if !force && self.content_unchanged(&file.url, file.cha) {
 			return;
 		}
 
@@ -38,32 +37,31 @@ impl Preview {
 		}
 	}
 
-	pub fn go_folder(&mut self, file: File, mtime: Option<SystemTime>, force: bool) {
-		if !force && self.content_unchanged(&file.url, &file.cha) {
+	pub fn go_folder(&mut self, file: File, dir: Option<Cha>, force: bool) {
+		let (cha, url) = (file.cha, file.url());
+		self.go(file, MIME_DIR, force);
+
+		if self.content_unchanged(&url, cha) {
 			return;
 		}
 
-		let url = file.url();
-		self.go(file, MIME_DIR, force);
+		self.folder_loader.take().map(|h| h.abort());
+		self.folder_loader = Some(tokio::spawn(async move {
+			let Some(new) = Files::assert_stale(&url, dir.unwrap_or(Cha::dummy())).await else {
+				return;
+			};
+			let Ok(rx) = Files::from_dir(&url).await else { return };
 
-		self.folder_loader.take().map(|(_, h)| h.abort());
-		self.folder_loader = Some((
-			url.clone(),
-			tokio::spawn(async move {
-				let Some(meta) = Files::assert_stale(&url, mtime).await else { return };
-				let Ok(rx) = Files::from_dir(&url).await else { return };
+			let stream =
+				UnboundedReceiverStream::new(rx).chunks_timeout(50000, Duration::from_millis(500));
+			pin!(stream);
 
-				let stream =
-					UnboundedReceiverStream::new(rx).chunks_timeout(50000, Duration::from_millis(500));
-				pin!(stream);
-
-				let ticket = FilesOp::prepare(&url);
-				while let Some(chunk) = stream.next().await {
-					FilesOp::Part(url.clone(), chunk, ticket).emit();
-				}
-				FilesOp::Done(url, meta.modified().ok(), ticket).emit();
-			}),
-		));
+			let ticket = FilesOp::prepare(&url);
+			while let Some(chunk) = stream.next().await {
+				FilesOp::Part(url.clone(), chunk, ticket).emit();
+			}
+			FilesOp::Done(url, new, ticket).emit();
+		}));
 	}
 
 	#[inline]
@@ -90,25 +88,11 @@ impl Preview {
 		matches!(self.lock, Some(ref lock) if lock.url == *url)
 	}
 
-	fn content_unchanged(&self, url: &Url, cha: &Cha) -> bool {
-		let Some(lock) = &self.lock else {
-			return false;
-		};
-
-		*url == lock.url
-			&& self.skip == lock.skip
-			&& cha.len == lock.cha.len
-			&& cha.mtime == lock.cha.mtime
-			&& cha.kind == lock.cha.kind
-			&& {
-				#[cfg(unix)]
-				{
-					cha.perm == lock.cha.perm
-				}
-				#[cfg(windows)]
-				{
-					true
-				}
-			}
+	#[inline]
+	fn content_unchanged(&self, url: &Url, cha: Cha) -> bool {
+		match &self.lock {
+			Some(l) => *url == l.url && self.skip == l.skip && cha.hits(l.cha),
+			None => false,
+		}
 	}
 }

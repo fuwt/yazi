@@ -5,7 +5,7 @@ use parking_lot::RwLock;
 use yazi_boot::BOOT;
 use yazi_shared::{fs::Url, RoCell};
 
-use crate::{body::{Body, BodyBulk, BodyCd, BodyDelete, BodyHi, BodyHover, BodyMove, BodyMoveItem, BodyRename, BodyTrash, BodyYank}, Client, ID, PEERS};
+use crate::{body::{Body, BodyBulk, BodyCd, BodyDelete, BodyHi, BodyHover, BodyMove, BodyMoveItem, BodyRename, BodyTab, BodyTrash, BodyYank}, Client, ID, PEERS};
 
 pub static LOCAL: RoCell<RwLock<HashMap<String, HashMap<String, Function<'static>>>>> =
 	RoCell::new();
@@ -72,10 +72,10 @@ impl Pubsub {
 			return Self::pub_(body);
 		}
 
-		let (kind, peers) = (body.kind(), PEERS.read());
-		if receiver == 0 && peers.values().any(|c| c.able(kind)) {
+		let kind = body.kind();
+		if receiver == 0 && Self::any_remote_own(kind) {
 			Client::push(body);
-		} else if peers.get(&receiver).is_some_and(|c| c.able(kind)) {
+		} else if PEERS.read().get(&receiver).is_some_and(|c| c.able(kind)) {
 			Client::push(body.with_receiver(receiver));
 		}
 	}
@@ -112,6 +112,18 @@ impl Pubsub {
 		}
 	}
 
+	pub fn pub_from_tab(idx: usize) {
+		if LOCAL.read().contains_key("tab") {
+			Self::pub_(BodyTab::owned(idx));
+		}
+		if PEERS.read().values().any(|p| p.able("tab")) {
+			Client::push(BodyTab::owned(idx));
+		}
+		if BOOT.local_events.contains("tab") {
+			BodyTab::owned(idx).with_receiver(*ID).flush();
+		}
+	}
+
 	pub fn pub_from_rename(tab: usize, from: &Url, to: &Url) {
 		if LOCAL.read().contains_key("rename") {
 			Self::pub_(BodyRename::dummy(tab, from, to));
@@ -140,7 +152,7 @@ impl Pubsub {
 		if LOCAL.read().contains_key("@yank") {
 			Self::pub_(BodyYank::dummy());
 		}
-		if Self::own_static_ability("@yank") {
+		if Self::any_remote_own("@yank") {
 			Client::push(BodyYank::borrowed(cut, urls));
 		}
 		if BOOT.local_events.contains("@yank") {
@@ -185,7 +197,7 @@ impl Pubsub {
 	}
 
 	#[inline]
-	fn own_static_ability(kind: &str) -> bool {
+	fn any_remote_own(kind: &str) -> bool {
 		REMOTE.read().contains_key(kind)  // Owned abilities
 			|| PEERS.read().values().any(|p| p.able(kind))  // Remote peers' abilities
 			|| BOOT.remote_events.contains(kind) // Owned abilities from the command-line argument

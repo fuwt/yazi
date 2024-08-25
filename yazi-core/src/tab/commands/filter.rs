@@ -3,10 +3,11 @@ use std::time::Duration;
 use tokio::pin;
 use tokio_stream::{wrappers::UnboundedReceiverStream, StreamExt};
 use yazi_config::popup::InputCfg;
+use yazi_fs::{Filter, FilterCase};
 use yazi_proxy::{InputProxy, ManagerProxy};
 use yazi_shared::{emit, event::Cmd, render, Debounce, InputError, Layer};
 
-use crate::{folder::{Filter, FilterCase}, tab::Tab};
+use crate::tab::Tab;
 
 #[derive(Default)]
 pub struct Opt {
@@ -39,7 +40,7 @@ impl Tab {
 				let (Ok(s) | Err(InputError::Typed(s))) = result else { continue };
 
 				emit!(Call(
-					Cmd::args("filter_do", vec![s])
+					Cmd::args("filter_do", &[s])
 						.with_bool("smart", opt.case == FilterCase::Smart)
 						.with_bool("insensitive", opt.case == FilterCase::Insensitive)
 						.with_bool("done", done),
@@ -71,7 +72,7 @@ impl Tab {
 
 		self.current.repos(hovered.as_ref());
 		if self.current.hovered().map(|f| &f.url) != hovered.as_ref() {
-			ManagerProxy::hover(None);
+			ManagerProxy::hover(None, self.idx);
 		}
 
 		render!();

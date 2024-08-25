@@ -9,7 +9,7 @@ use super::{CtxRef, SCOPE};
 
 pub(super) struct File {
 	idx:    usize,
-	folder: *const yazi_core::folder::Folder,
+	folder: *const yazi_fs::Folder,
 	tab:    *const yazi_core::tab::Tab,
 }
 
@@ -27,7 +27,7 @@ impl File {
 	#[inline]
 	pub(super) fn make(
 		idx: usize,
-		folder: &yazi_core::folder::Folder,
+		folder: &yazi_fs::Folder,
 		tab: &yazi_core::tab::Tab,
 	) -> mlua::Result<AnyUserData<'static>> {
 		SCOPE.create_any_userdata(Self { idx, folder, tab })
@@ -56,8 +56,11 @@ impl File {
 			});
 			reg.add_method("style", |lua, me, ()| {
 				let cx = lua.named_registry_value::<CtxRef>("cx")?;
-				let mime =
-					if me.is_dir() { Some(MIME_DIR) } else { cx.manager.mimetype.get(&me.url).map(|x| &**x) };
+				let mime = if me.is_dir() {
+					MIME_DIR
+				} else {
+					cx.manager.mimetype.get(&me.url).map(|x| &**x).unwrap_or_default()
+				};
 
 				Ok(THEME.filetypes.iter().find(|&x| x.matches(me, mime)).map(|x| Style::from(x.style)))
 			});
@@ -125,7 +128,7 @@ impl File {
 	}
 
 	#[inline]
-	fn folder(&self) -> &yazi_core::folder::Folder { unsafe { &*self.folder } }
+	fn folder(&self) -> &yazi_fs::Folder { unsafe { &*self.folder } }
 
 	#[inline]
 	fn tab(&self) -> &yazi_core::tab::Tab { unsafe { &*self.tab } }

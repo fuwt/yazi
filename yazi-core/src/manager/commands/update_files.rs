@@ -1,9 +1,10 @@
 use std::borrow::Cow;
 
+use yazi_fs::Folder;
 use yazi_proxy::ManagerProxy;
 use yazi_shared::{event::Cmd, fs::FilesOp, render};
 
-use crate::{folder::Folder, manager::{Manager, LINKED}, tab::Tab, tasks::Tasks};
+use crate::{manager::{Manager, LINKED}, tab::Tab, tasks::Tasks};
 
 pub struct Opt {
 	op: FilesOp,
@@ -85,7 +86,7 @@ impl Manager {
 			return;
 		}
 
-		ManagerProxy::hover(None); // Re-hover in next loop
+		ManagerProxy::hover(None, tab.idx); // Re-hover in next loop
 		ManagerProxy::update_paged(); // Update for paged files in next loop
 		if calc {
 			tasks.prework_sorted(&tab.current.files);

@@ -30,7 +30,7 @@ impl Manager {
 			return render!(self.active_mut().preview.reset());
 		};
 
-		let folder = self.active().hovered_folder().map(|f| (f.offset, f.mtime));
+		let folder = self.active().hovered_folder().map(|f| (f.offset, f.cha));
 		if !self.active().preview.same_url(&hovered.url) {
 			self.active_mut().preview.skip = folder.map(|f| f.0).unwrap_or_default();
 			render!(self.active_mut().preview.reset());
@@ -51,14 +51,14 @@ impl Manager {
 		}
 
 		if hovered.is_dir() {
-			self.active_mut().preview.go_folder(hovered, folder.and_then(|f| f.1), opt.force);
+			self.active_mut().preview.go_folder(hovered, folder.map(|f| f.1), opt.force);
 			return;
 		}
 
-		if let Some(mime) = self.mimetype.get(&hovered.url).cloned() {
+		let mime = self.mimetype.get(&hovered.url).cloned().unwrap_or_default();
+		if !mime.is_empty() {
+			// Wait till mimetype is resolved to avoid flickering
 			self.active_mut().preview.go(hovered, &mime, opt.force);
-		} else {
-			render!(self.active_mut().preview.reset());
 		}
 	}
 }

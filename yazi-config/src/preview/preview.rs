@@ -1,4 +1,4 @@
-use std::{path::PathBuf, str::FromStr, time::{SystemTime, UNIX_EPOCH}};
+use std::{borrow::Cow, path::PathBuf, str::FromStr, time::{SystemTime, UNIX_EPOCH}};
 
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
@@ -15,6 +15,7 @@ pub struct Preview {
 
 	pub cache_dir: PathBuf,
 
+	pub image_delay:    u8,
 	pub image_filter:   String,
 	pub image_quality:  u8,
 	pub sixel_fraction: u8,
@@ -28,6 +29,22 @@ impl Preview {
 	pub fn tmpfile(&self, prefix: &str) -> PathBuf {
 		let time = SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards");
 		self.cache_dir.join(format!("{prefix}-{}", time.as_nanos() / 1000))
+	}
+
+	#[inline]
+	pub fn indent(&self) -> Cow<'static, str> {
+		match self.tab_size {
+			0 => Cow::Borrowed(""),
+			1 => Cow::Borrowed(" "),
+			2 => Cow::Borrowed("  "),
+			3 => Cow::Borrowed("   "),
+			4 => Cow::Borrowed("    "),
+			5 => Cow::Borrowed("     "),
+			6 => Cow::Borrowed("      "),
+			7 => Cow::Borrowed("       "),
+			8 => Cow::Borrowed("        "),
+			n => Cow::Owned(" ".repeat(n as usize)),
+		}
 	}
 }
 
@@ -47,6 +64,8 @@ impl FromStr for Preview {
 
 			cache_dir: Option<String>,
 
+			#[validate(range(min = 0, max = 100))]
+			image_delay:    u8,
 			image_filter:   String,
 			#[validate(range(min = 50, max = 90))]
 			image_quality:  u8,
@@ -71,6 +90,7 @@ impl FromStr for Preview {
 
 			cache_dir,
 
+			image_delay: preview.image_delay,
 			image_filter: preview.image_filter,
 			image_quality: preview.image_quality,
 			sixel_fraction: preview.sixel_fraction,

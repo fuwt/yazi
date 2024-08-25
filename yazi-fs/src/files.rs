@@ -1,17 +1,17 @@
-use std::{collections::{HashMap, HashSet}, fs::Metadata, mem, ops::Deref, sync::atomic::Ordering, time::SystemTime};
+use std::{collections::{HashMap, HashSet}, mem, ops::Deref, sync::atomic::Ordering};
 
 use tokio::{fs::{self, DirEntry}, select, sync::mpsc::{self, UnboundedReceiver}};
 use yazi_config::{manager::SortBy, MANAGER};
-use yazi_shared::fs::{maybe_exists, File, FilesOp, Url, FILES_TICKET};
+use yazi_shared::fs::{maybe_exists, Cha, File, FilesOp, Url, FILES_TICKET};
 
 use super::{FilesSorter, Filter};
 
 pub struct Files {
-	hidden:              Vec<File>,
-	items:               Vec<File>,
-	ticket:              u64,
-	version:             u64,
-	pub(crate) revision: u64,
+	hidden:       Vec<File>,
+	items:        Vec<File>,
+	ticket:       u64,
+	version:      u64,
+	pub revision: u64,
 
 	pub sizes: HashMap<Url, u64>,
 
@@ -96,14 +96,14 @@ impl Files {
 		)
 	}
 
-	pub async fn assert_stale(url: &Url, mtime: Option<SystemTime>) -> Option<Metadata> {
-		match fs::metadata(url).await {
-			Ok(m) if !m.is_dir() => {
+	pub async fn assert_stale(url: &Url, cha: Cha) -> Option<Cha> {
+		match fs::metadata(url).await.map(Cha::from) {
+			Ok(c) if !c.is_dir() => {
 				// FIXME: use `ErrorKind::NotADirectory` instead once it gets stabilized
 				FilesOp::IOErr(url.clone(), std::io::ErrorKind::AlreadyExists).emit();
 			}
-			Ok(m) if mtime == m.modified().ok() => {}
-			Ok(m) => return Some(m),
+			Ok(c) if c.hits(cha) => {}
+			Ok(c) => return Some(c),
 			Err(e) => {
 				if maybe_exists(url).await {
 					FilesOp::IOErr(url.clone(), e.kind()).emit();
@@ -264,19 +264,18 @@ impl Files {
 
 		macro_rules! go {
 			($dist:expr, $src:expr, $inc:literal) => {
-				let mut b = false;
+				let mut b = true;
 				for i in 0..$dist.len() {
 					if let Some(f) = $src.remove(&$dist[i].url) {
-						if $dist[i] != f {
-							b = true;
-							$dist[i] = f;
-						}
+						b &= $dist[i].cha.hits(f.cha);
+						$dist[i] = f;
+
 						if $src.is_empty() {
 							break;
 						}
 					}
 				}
-				self.revision += if b { $inc } else { 0 };
+				self.revision += if b { 0 } else { $inc };
 			};
 		}
 

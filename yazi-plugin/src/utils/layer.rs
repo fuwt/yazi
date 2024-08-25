@@ -38,7 +38,7 @@ impl Utils {
 					let cand = cand?;
 					cands.push(Control {
 						on:   Self::parse_keys(cand.raw_get("on")?)?,
-						run:  vec![Cmd::args("callback", vec![i.to_string()]).with_any("tx", tx.clone())],
+						run:  vec![Cmd::args("callback", &[i]).with_any("tx", tx.clone())],
 						desc: cand.raw_get("desc").ok(),
 					});
 				}
@@ -85,6 +85,19 @@ impl Utils {
 				}
 			})?,
 		)?;
+
+		// TODO: redesign the confirm API
+		// ya.raw_set(
+		// 	"confirm",
+		// 	lua.create_async_function(|_, t: Table| async move {
+		// 		let result = ConfirmProxy::show(ConfirmCfg {
+		// 			title:    t.raw_get("title")?,
+		// 			content:  t.raw_get("content")?,
+		// 			position: Position::try_from(t.raw_get::<_, Table>("position")?)?.into(),
+		// 		});
+		// 		Ok(result.await)
+		// 	})?,
+		// )?;
 
 		ya.raw_set(
 			"notify",

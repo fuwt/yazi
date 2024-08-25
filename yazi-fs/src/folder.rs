@@ -1,18 +1,17 @@
-use std::{mem, time::SystemTime};
+use std::mem;
 
-use ratatui::layout::Rect;
 use yazi_config::{LAYOUT, MANAGER};
 use yazi_proxy::ManagerProxy;
-use yazi_shared::fs::{File, FilesOp, Url};
+use yazi_shared::fs::{Cha, File, FilesOp, Url};
 
 use super::FolderStage;
-use crate::{folder::Files, Step};
+use crate::{Files, Step};
 
 #[derive(Default)]
 pub struct Folder {
 	pub cwd:   Url,
+	pub cha:   Cha,
 	pub files: Files,
-	pub mtime: Option<SystemTime>,
 	pub stage: FolderStage,
 
 	pub offset: usize,
@@ -30,17 +29,17 @@ impl Folder {
 	pub fn update(&mut self, op: FilesOp) -> bool {
 		let (stage, revision) = (self.stage, self.files.revision);
 		match op {
-			FilesOp::Full(_, _, mtime) => {
-				(self.mtime, self.stage) = (mtime, FolderStage::Loaded);
+			FilesOp::Full(_, _, cha) => {
+				(self.cha, self.stage) = (cha, FolderStage::Loaded);
 			}
 			FilesOp::Part(_, _, ticket) if ticket == self.files.ticket() => {
 				self.stage = FolderStage::Loading;
 			}
-			FilesOp::Done(_, mtime, ticket) if ticket == self.files.ticket() => {
-				(self.mtime, self.stage) = (mtime, FolderStage::Loaded);
+			FilesOp::Done(_, cha, ticket) if ticket == self.files.ticket() => {
+				(self.cha, self.stage) = (cha, FolderStage::Loaded);
 			}
 			FilesOp::IOErr(_, kind) => {
-				(self.mtime, self.stage) = (None, FolderStage::Failed(kind));
+				(self.cha, self.stage) = (Cha::dummy(), FolderStage::Failed(kind));
 			}
 			_ => {}
 		}
@@ -150,14 +149,5 @@ impl Folder {
 		let start = (page.saturating_sub(1) * limit).min(len.saturating_sub(1));
 		let end = ((page + 2) * limit).min(len);
 		&self.files[start..end]
-	}
-
-	pub fn rect_current(&self, url: &Url) -> Option<Rect> {
-		let y = self.files.position(url)? - self.offset;
-
-		let mut rect = LAYOUT.load().current;
-		rect.y = rect.y.saturating_sub(1) + y as u16;
-		rect.height = 1;
-		Some(rect)
 	}
 }
