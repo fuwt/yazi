@@ -1,11 +1,11 @@
-use yazi_config::{keymap::{ControlCow, Key}, WHICH};
+use yazi_config::{keymap::{ChordCow, Key}, WHICH};
 use yazi_shared::{emit, render, render_and, Layer};
 
 #[derive(Default)]
 pub struct Which {
 	pub(super) layer: Layer,
 	pub times:        usize,
-	pub cands:        Vec<ControlCow>,
+	pub cands:        Vec<ChordCow>,
 
 	// Visibility
 	pub visible: bool,

@@ -17,6 +17,7 @@ pub enum UrlScheme {
 	#[default]
 	Regular,
 	Search,
+	SearchItem,
 	Archive,
 }
 
@@ -98,12 +99,12 @@ impl AsRef<OsStr> for Url {
 
 impl Display for Url {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-		if self.scheme == UrlScheme::Regular {
+		if matches!(self.scheme, UrlScheme::Regular | UrlScheme::SearchItem) {
 			return f.write_str(&self.path.to_string_lossy());
 		}
 
 		let scheme = match self.scheme {
-			UrlScheme::Regular => unreachable!(),
+			UrlScheme::Regular | UrlScheme::SearchItem => unreachable!(),
 			UrlScheme::Search => "search://",
 			UrlScheme::Archive => "archive://",
 		};
@@ -118,13 +119,18 @@ impl Display for Url {
 	}
 }
 
+impl From<&Url> for String {
+	fn from(url: &Url) -> Self { url.to_string() }
+}
+
 impl Url {
 	#[inline]
 	pub fn join(&self, path: impl AsRef<Path>) -> Self {
 		let url = Self::from(self.path.join(path));
 		match self.scheme {
 			UrlScheme::Regular => url,
-			UrlScheme::Search => url,
+			UrlScheme::Search => url.into_search_item(),
+			UrlScheme::SearchItem => url,
 			UrlScheme::Archive => url.into_archive(),
 		}
 	}
@@ -136,6 +142,7 @@ impl Url {
 			match self.scheme {
 				UrlScheme::Regular => url,
 				UrlScheme::Search => url,
+				UrlScheme::SearchItem => url,
 				UrlScheme::Archive => url,
 			}
 		})
@@ -157,12 +164,14 @@ impl Url {
 }
 
 impl Url {
-	// --- Scheme
+	// --- Regular
 	#[inline]
 	pub fn is_regular(&self) -> bool { self.scheme == UrlScheme::Regular }
 
 	#[inline]
-	pub fn to_regular(&self) -> Self { self.clone().into_regular() }
+	pub fn to_regular(&self) -> Self {
+		Self { scheme: UrlScheme::Regular, path: self.path.clone(), frag: String::new() }
+	}
 
 	#[inline]
 	pub fn into_regular(mut self) -> Self {
@@ -171,16 +180,19 @@ impl Url {
 		self
 	}
 
+	// --- Search
 	#[inline]
 	pub fn is_search(&self) -> bool { self.scheme == UrlScheme::Search }
 
 	#[inline]
-	pub fn to_search(&self, frag: String) -> Self { self.clone().into_search(frag) }
+	pub fn to_search(&self, frag: &str) -> Self {
+		Self { scheme: UrlScheme::Search, path: self.path.clone(), frag: frag.to_owned() }
+	}
 
 	#[inline]
-	pub fn into_search(mut self, frag: String) -> Self {
-		self.scheme = UrlScheme::Search;
-		self.frag = frag;
+	pub fn into_search_item(mut self) -> Self {
+		self.scheme = UrlScheme::SearchItem;
+		self.frag = String::new();
 		self
 	}
 
@@ -188,7 +200,9 @@ impl Url {
 	pub fn is_archive(&self) -> bool { self.scheme == UrlScheme::Archive }
 
 	#[inline]
-	pub fn to_archive(&self) -> Self { self.clone().into_archive() }
+	pub fn to_archive(&self) -> Self {
+		Self { scheme: UrlScheme::Archive, path: self.path.clone(), frag: String::new() }
+	}
 
 	#[inline]
 	pub fn into_archive(mut self) -> Self {
@@ -197,9 +211,16 @@ impl Url {
 		self
 	}
 
+	// --- Scheme
+	#[inline]
+	pub fn scheme(&self) -> UrlScheme { self.scheme }
+
 	// --- Path
 	#[inline]
 	pub fn set_path(&mut self, path: PathBuf) { self.path = path; }
+
+	#[inline]
+	pub fn into_path(self) -> PathBuf { self.path }
 
 	// --- Frag
 	#[inline]

@@ -2,14 +2,14 @@ use std::mem;
 
 use yazi_config::{LAYOUT, MANAGER};
 use yazi_proxy::ManagerProxy;
-use yazi_shared::fs::{Cha, File, FilesOp, Url};
+use yazi_shared::fs::{Cha, File, FilesOp, Loc, Url};
 
 use super::FolderStage;
 use crate::{Files, Step};
 
 #[derive(Default)]
 pub struct Folder {
-	pub cwd:   Url,
+	pub loc:   Loc,
 	pub cha:   Cha,
 	pub files: Files,
 	pub stage: FolderStage,
@@ -22,7 +22,7 @@ pub struct Folder {
 }
 
 impl From<&Url> for Folder {
-	fn from(cwd: &Url) -> Self { Self { cwd: cwd.clone(), ..Default::default() } }
+	fn from(cwd: &Url) -> Self { Self { loc: Loc::from(cwd.clone()), ..Default::default() } }
 }
 
 impl Folder {
@@ -63,7 +63,7 @@ impl Folder {
 
 	pub fn arrow(&mut self, step: impl Into<Step>) -> bool {
 		let step = step.into() as Step;
-		let b = if self.files.is_empty() {
+		let mut b = if self.files.is_empty() {
 			(self.cursor, self.offset, self.tracing) = (0, 0, false);
 			false
 		} else if step.is_positive() {
@@ -72,13 +72,15 @@ impl Folder {
 			self.prev(step)
 		};
 
-		self.sync_page(false);
 		self.tracing |= b;
+		b |= self.squeeze_offset();
+
+		self.sync_page(false);
 		b
 	}
 
 	pub fn hover(&mut self, url: &Url) -> bool {
-		if self.hovered().map(|h| &h.url) == Some(url) {
+		if self.hovered().map(|h| h.url()) == Some(url) {
 			return false;
 		}
 
@@ -99,7 +101,7 @@ impl Folder {
 
 		let new = self.cursor / limit;
 		if mem::replace(&mut self.page, new) != new || force {
-			ManagerProxy::update_paged_by(new, &self.cwd);
+			ManagerProxy::update_paged_by(new, &self.loc);
 		}
 	}
 
@@ -111,10 +113,10 @@ impl Folder {
 		let scrolloff = (limit / 2).min(MANAGER.scrolloff as usize);
 
 		self.cursor = step.add(self.cursor, limit).min(len.saturating_sub(1));
-		self.offset = if self.cursor >= (self.offset + limit).min(len).saturating_sub(scrolloff) {
-			len.saturating_sub(limit).min(self.offset + self.cursor - old.0)
-		} else {
+		self.offset = if self.cursor < (self.offset + limit).min(len).saturating_sub(scrolloff) {
 			self.offset.min(len.saturating_sub(1))
+		} else {
+			len.saturating_sub(limit).min(self.offset + self.cursor - old.0)
 		};
 
 		old != (self.cursor, self.offset)
@@ -135,6 +137,22 @@ impl Folder {
 		};
 
 		old != (self.cursor, self.offset)
+	}
+
+	fn squeeze_offset(&mut self) -> bool {
+		let old = self.offset;
+		let len = self.files.len();
+
+		let limit = LAYOUT.load().current.height as usize;
+		let scrolloff = (limit / 2).min(MANAGER.scrolloff as usize);
+
+		self.offset = if self.cursor < (self.offset + limit).min(len).saturating_sub(scrolloff) {
+			len.saturating_sub(limit).min(self.offset)
+		} else {
+			len.saturating_sub(limit).min(self.cursor.saturating_sub(limit) + scrolloff)
+		};
+
+		old != self.offset
 	}
 }
 

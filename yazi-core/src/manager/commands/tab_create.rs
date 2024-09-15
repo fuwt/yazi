@@ -35,18 +35,18 @@ impl Tabs {
 		}
 
 		let opt = opt.into() as Opt;
-		let mut tab = Tab::default();
+		let mut tab = Tab { idx: self.cursor + 1, ..Default::default() };
 
 		if !opt.current {
 			tab.cd(opt.url);
 		} else if let Some(h) = self.active().current.hovered() {
 			tab.conf = self.active().conf.clone();
 			tab.apply_files_attrs();
-			tab.reveal(h.url.to_owned());
+			tab.reveal(h.url_owned());
 		} else {
 			tab.conf = self.active().conf.clone();
 			tab.apply_files_attrs();
-			tab.cd(self.active().current.cwd.clone());
+			tab.cd(self.active().cwd().clone());
 		}
 
 		self.items.insert(self.cursor + 1, tab);

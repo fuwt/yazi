@@ -7,7 +7,7 @@ use tokio::{io::{AsyncReadExt, BufReader}, time::timeout};
 use tracing::{error, warn};
 use yazi_shared::env_exists;
 
-use crate::{Adapter, CLOSE, ESCAPE, START, TMUX};
+use crate::{tcsi, Adapter, TMUX};
 
 #[derive(Clone, Debug)]
 pub enum Emulator {
@@ -18,6 +18,7 @@ pub enum Emulator {
 	WezTerm,
 	Foot,
 	Ghostty,
+	Microsoft,
 	BlackBox,
 	VSCode,
 	Tabby,
@@ -34,15 +35,16 @@ impl Emulator {
 			Self::Unknown(adapters) => adapters,
 			Self::Kitty => vec![Adapter::Kitty],
 			Self::Konsole => vec![Adapter::KittyOld],
-			Self::Iterm2 => vec![Adapter::Iterm2, Adapter::Sixel],
-			Self::WezTerm => vec![Adapter::Iterm2, Adapter::Sixel],
+			Self::Iterm2 => vec![Adapter::Iip, Adapter::Sixel],
+			Self::WezTerm => vec![Adapter::Iip, Adapter::Sixel],
 			Self::Foot => vec![Adapter::Sixel],
 			Self::Ghostty => vec![Adapter::Kitty],
+			Self::Microsoft => vec![Adapter::Sixel],
 			Self::BlackBox => vec![Adapter::Sixel],
-			Self::VSCode => vec![Adapter::Iterm2, Adapter::Sixel],
-			Self::Tabby => vec![Adapter::Iterm2, Adapter::Sixel],
-			Self::Hyper => vec![Adapter::Iterm2, Adapter::Sixel],
-			Self::Mintty => vec![Adapter::Iterm2],
+			Self::VSCode => vec![Adapter::Iip, Adapter::Sixel],
+			Self::Tabby => vec![Adapter::Iip, Adapter::Sixel],
+			Self::Hyper => vec![Adapter::Iip, Adapter::Sixel],
+			Self::Mintty => vec![Adapter::Iip],
 			Self::Neovim => vec![],
 			Self::Apple => vec![],
 			Self::Urxvt => vec![],
@@ -62,6 +64,7 @@ impl Emulator {
 			("ITERM_SESSION_ID", Self::Iterm2),
 			("WEZTERM_EXECUTABLE", Self::WezTerm),
 			("GHOSTTY_RESOURCES_DIR", Self::Ghostty),
+			("WT_Session", Self::Microsoft),
 			("VSCODE_INJECTION", Self::VSCode),
 			("TABBY_CONFIG_DIRECTORY", Self::Tabby),
 		];
@@ -123,10 +126,7 @@ impl Emulator {
 		execute!(
 			LineWriter::new(stderr()),
 			SavePosition,
-			Print(format!(
-				"{}[>q{}_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA{}\\{}[c{}",
-				START, ESCAPE, ESCAPE, ESCAPE, CLOSE
-			)),
+			Print(tcsi("\x1b[>q\x1b_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\x1b\\\x1b[c")),
 			RestorePosition
 		)?;
 

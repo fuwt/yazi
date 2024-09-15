@@ -1,8 +1,8 @@
 use ansi_to_tui::IntoText;
-use mlua::{AnyUserData, ExternalError, ExternalResult, IntoLua, Lua, Table, UserData, Value};
+use mlua::{AnyUserData, ExternalError, ExternalResult, IntoLua, Lua, Table, UserData};
 use ratatui::widgets::Widget;
 
-use super::{Line, RectRef, Renderable, Style};
+use super::{Line, RectRef, Renderable};
 
 // Alignment
 const LEFT: u8 = 0;
@@ -10,9 +10,9 @@ const CENTER: u8 = 1;
 const RIGHT: u8 = 2;
 
 // Wrap
-const WRAP_NO: u8 = 0;
-const WRAP: u8 = 1;
-const WRAP_TRIM: u8 = 2;
+pub const WRAP_NO: u8 = 0;
+pub const WRAP: u8 = 1;
+pub const WRAP_TRIM: u8 = 2;
 
 #[derive(Clone, Debug, Default)]
 pub struct Paragraph {
@@ -45,7 +45,7 @@ impl Paragraph {
 			("CENTER", CENTER.into_lua(lua)?),
 			("RIGHT", RIGHT.into_lua(lua)?),
 			// Wrap
-			("WRAP_OFF", WRAP_NO.into_lua(lua)?),
+			("WRAP_NO", WRAP_NO.into_lua(lua)?),
 			("WRAP", WRAP.into_lua(lua)?),
 			("WRAP_TRIM", WRAP_TRIM.into_lua(lua)?),
 		])?;
@@ -58,20 +58,9 @@ impl Paragraph {
 
 impl UserData for Paragraph {
 	fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
+		crate::impl_style_method!(methods, style);
 		crate::impl_style_shorthands!(methods, style);
 
-		methods.add_function("style", |_, (ud, value): (AnyUserData, Value)| {
-			{
-				let mut me = ud.borrow_mut::<Self>()?;
-				match value {
-					Value::Nil => me.style = ratatui::style::Style::default(),
-					Value::Table(tb) => me.style = Style::try_from(tb)?.0,
-					Value::UserData(ud) => me.style = ud.borrow::<Style>()?.0,
-					_ => return Err("expected a Style or Table or nil".into_lua_err()),
-				}
-			}
-			Ok(ud)
-		});
 		methods.add_function("align", |_, (ud, align): (AnyUserData, u8)| {
 			ud.borrow_mut::<Self>()?.alignment = match align {
 				CENTER => ratatui::layout::Alignment::Center,

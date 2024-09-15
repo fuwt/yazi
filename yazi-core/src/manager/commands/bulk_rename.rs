@@ -95,8 +95,9 @@ impl Manager {
 			}
 		}
 
+		// FIXME: consider old and new in the different directories
 		if !succeeded.is_empty() {
-			Pubsub::pub_from_bulk(succeeded.iter().map(|(u, f)| (u, &f.url)).collect());
+			Pubsub::pub_from_bulk(succeeded.iter().map(|(u, f)| (u, f.url())).collect());
 			FilesOp::Upserting(cwd, succeeded).emit();
 		}
 		drop(permit);

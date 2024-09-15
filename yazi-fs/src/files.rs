@@ -45,8 +45,8 @@ impl Deref for Files {
 }
 
 impl Files {
-	pub async fn from_dir(url: &Url) -> std::io::Result<UnboundedReceiver<File>> {
-		let mut it = fs::read_dir(url).await?;
+	pub async fn from_dir(dir: &Url) -> std::io::Result<UnboundedReceiver<File>> {
+		let mut it = fs::read_dir(dir).await?;
 		let (tx, rx) = mpsc::unbounded_channel();
 
 		tokio::spawn(async move {
@@ -66,18 +66,18 @@ impl Files {
 		Ok(rx)
 	}
 
-	pub async fn from_dir_bulk(url: &Url) -> std::io::Result<Vec<File>> {
-		let mut it = fs::read_dir(url).await?;
-		let mut items = Vec::with_capacity(5000);
-		while let Ok(Some(item)) = it.next_entry().await {
-			items.push(item);
+	pub async fn from_dir_bulk(dir: &Url) -> std::io::Result<Vec<File>> {
+		let mut it = fs::read_dir(dir).await?;
+		let mut entries = Vec::with_capacity(5000);
+		while let Ok(Some(entry)) = it.next_entry().await {
+			entries.push(entry);
 		}
 
-		let (first, rest) = items.split_at(items.len() / 3);
-		let (second, third) = rest.split_at(items.len() / 3);
-		async fn go(entities: &[DirEntry]) -> Vec<File> {
-			let mut files = Vec::with_capacity(entities.len() / 3 + 1);
-			for entry in entities {
+		let (first, rest) = entries.split_at(entries.len() / 3);
+		let (second, third) = rest.split_at(entries.len() / 3);
+		async fn go(entries: &[DirEntry]) -> Vec<File> {
+			let mut files = Vec::with_capacity(entries.len() / 3 + 1);
+			for entry in entries {
 				let url = Url::from(entry.path());
 				files.push(match entry.metadata().await {
 					Ok(meta) => File::from_meta(url, meta).await,
@@ -174,9 +174,9 @@ impl Files {
 
 		macro_rules! go {
 			($dist:expr, $src:expr, $inc:literal) => {
-				let mut todo: HashMap<_, _> = $src.into_iter().map(|f| (f.url(), f)).collect();
+				let mut todo: HashMap<_, _> = $src.into_iter().map(|f| (f.url_owned(), f)).collect();
 				for f in &$dist {
-					if todo.remove(&f.url).is_some() && todo.is_empty() {
+					if todo.remove(f.url()).is_some() && todo.is_empty() {
 						break;
 					}
 				}
@@ -207,7 +207,7 @@ impl Files {
 				let mut todo: HashSet<_> = $src.into_iter().collect();
 				let len = $dist.len();
 
-				$dist.retain(|f| !todo.remove(&f.url));
+				$dist.retain(|f| !todo.remove(f.url()));
 				if $dist.len() != len {
 					self.revision += $inc;
 				}
@@ -238,7 +238,7 @@ impl Files {
 			($dist:expr, $src:expr, $inc:literal) => {
 				let len = $dist.len();
 
-				$dist.retain(|f| !$src.remove(&f.url));
+				$dist.retain(|f| !$src.remove(f.url()));
 				if $dist.len() != len {
 					self.revision += $inc;
 				}
@@ -266,7 +266,7 @@ impl Files {
 			($dist:expr, $src:expr, $inc:literal) => {
 				let mut b = true;
 				for i in 0..$dist.len() {
-					if let Some(f) = $src.remove(&$dist[i].url) {
+					if let Some(f) = $src.remove($dist[i].url()) {
 						b &= $dist[i].cha.hits(f.cha);
 						$dist[i] = f;
 
@@ -282,7 +282,7 @@ impl Files {
 		let (mut hidden, mut items) = if let Some(filter) = &self.filter {
 			files.into_iter().partition(|(_, f)| {
 				(f.is_hidden() && !self.show_hidden)
-					|| !f.url.file_name().is_some_and(|s| filter.matches(s))
+					|| !f.url().file_name().is_some_and(|s| filter.matches(s))
 			})
 		} else if self.show_hidden {
 			(HashMap::new(), files)
@@ -332,7 +332,7 @@ impl Files {
 		if let Some(filter) = &self.filter {
 			files.into_iter().partition(|f| {
 				(f.is_hidden() && !self.show_hidden)
-					|| !f.url.file_name().is_some_and(|s| filter.matches(s))
+					|| !f.url().file_name().is_some_and(|s| filter.matches(s))
 			})
 		} else if self.show_hidden {
 			(vec![], files.into_iter().collect())
@@ -345,7 +345,8 @@ impl Files {
 impl Files {
 	// --- Items
 	#[inline]
-	pub fn position(&self, url: &Url) -> Option<usize> { self.iter().position(|f| f.url == *url) }
+	// TODO: use `name` instead of `url`
+	pub fn position(&self, url: &Url) -> Option<usize> { self.iter().position(|f| url == f.url()) }
 
 	// --- Ticket
 	#[inline]

@@ -1,7 +1,7 @@
 use std::{collections::{HashMap, HashSet}, time::Duration};
 
 use anyhow::Result;
-use notify_fork::{RecommendedWatcher, RecursiveMode, Watcher as _Watcher};
+use notify::{PollWatcher, RecommendedWatcher, RecursiveMode, Watcher as _Watcher};
 use parking_lot::RwLock;
 use tokio::{fs, pin, sync::{mpsc::{self, UnboundedReceiver}, watch}};
 use tokio_stream::{wrappers::UnboundedReceiverStream, StreamExt};
@@ -27,20 +27,23 @@ impl Watcher {
 		let (out_tx, out_rx) = mpsc::unbounded_channel();
 
 		let out_tx_ = out_tx.clone();
-		let watcher = RecommendedWatcher::new(
-			move |res: Result<notify_fork::Event, notify_fork::Error>| {
-				let Ok(event) = res else { return };
-				if event.kind.is_access() {
-					return;
-				}
-				for path in event.paths {
-					out_tx_.send(Url::from(path)).ok();
-				}
-			},
-			Default::default(),
-		);
+		let handler = move |res: Result<notify::Event, notify::Error>| {
+			let Ok(event) = res else { return };
+			if event.kind.is_access() {
+				return;
+			}
+			for path in event.paths {
+				out_tx_.send(Url::from(path)).ok();
+			}
+		};
 
-		tokio::spawn(Self::fan_in(in_rx, watcher.unwrap()));
+		let config = notify::Config::default().with_poll_interval(Duration::from_millis(500));
+		if *yazi_adapter::WSL {
+			tokio::spawn(Self::fan_in(in_rx, PollWatcher::new(handler, config).unwrap()));
+		} else {
+			tokio::spawn(Self::fan_in(in_rx, RecommendedWatcher::new(handler, config).unwrap()));
+		}
+
 		tokio::spawn(Self::fan_out(out_rx));
 		Self { in_tx, out_tx }
 	}
@@ -57,8 +60,11 @@ impl Watcher {
 	}
 
 	pub(super) fn trigger_dirs(&self, folders: &[&Folder]) {
-		let todo: Vec<_> =
-			folders.iter().filter(|&f| f.cwd.is_regular()).map(|&f| (f.cwd.clone(), f.cha)).collect();
+		let todo: Vec<_> = folders
+			.iter()
+			.filter(|&f| f.loc.is_regular())
+			.map(|&f| (f.loc.url().clone(), f.cha))
+			.collect();
 		if todo.is_empty() {
 			return;
 		}
@@ -76,7 +82,7 @@ impl Watcher {
 		});
 	}
 
-	async fn fan_in(mut rx: watch::Receiver<HashSet<Url>>, mut watcher: RecommendedWatcher) {
+	async fn fan_in(mut rx: watch::Receiver<HashSet<Url>>, mut watcher: impl notify::Watcher) {
 		loop {
 			let (mut to_unwatch, mut to_watch): (HashSet<_>, HashSet<_>) = {
 				let (new, old) = (&*rx.borrow_and_update(), &*WATCHED.read());
@@ -85,7 +91,7 @@ impl Watcher {
 
 			to_unwatch.retain(|u| match watcher.unwatch(u) {
 				Ok(_) => true,
-				Err(e) if matches!(e.kind, notify_fork::ErrorKind::WatchNotFound) => true,
+				Err(e) if matches!(e.kind, notify::ErrorKind::WatchNotFound) => true,
 				Err(e) => {
 					error!("Unwatch failed: {e:?}");
 					false

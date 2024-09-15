@@ -5,14 +5,14 @@ use ratatui::layout::Rect;
 use tracing::warn;
 use yazi_shared::env_exists;
 
-use super::{Iterm2, Kitty, KittyOld};
-use crate::{Chafa, Emulator, Sixel, Ueberzug, SHOWN, TMUX};
+use super::{Iip, Kitty, KittyOld};
+use crate::{Chafa, Emulator, Sixel, Ueberzug, SHOWN, TMUX, WSL};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Adapter {
 	Kitty,
 	KittyOld,
-	Iterm2,
+	Iip,
 	Sixel,
 
 	// Supported by Überzug++
@@ -26,7 +26,7 @@ impl Display for Adapter {
 		match self {
 			Self::Kitty => write!(f, "kitty"),
 			Self::KittyOld => write!(f, "kitty"),
-			Self::Iterm2 => write!(f, "iterm2"),
+			Self::Iip => write!(f, "iip"),
 			Self::Sixel => write!(f, "sixel"),
 			Self::X11 => write!(f, "x11"),
 			Self::Wayland => write!(f, "wayland"),
@@ -44,7 +44,7 @@ impl Adapter {
 		match self {
 			Self::Kitty => Kitty::image_show(path, max).await,
 			Self::KittyOld => KittyOld::image_show(path, max).await,
-			Self::Iterm2 => Iterm2::image_show(path, max).await,
+			Self::Iip => Iip::image_show(path, max).await,
 			Self::Sixel => Sixel::image_show(path, max).await,
 			Self::X11 | Self::Wayland => Ueberzug::image_show(path, max).await,
 			Self::Chafa => Chafa::image_show(path, max).await,
@@ -59,7 +59,7 @@ impl Adapter {
 		match self {
 			Self::Kitty => Kitty::image_erase(area),
 			Self::KittyOld => KittyOld::image_erase(area),
-			Self::Iterm2 => Iterm2::image_erase(area),
+			Self::Iip => Iip::image_erase(area),
 			Self::Sixel => Sixel::image_erase(area),
 			Self::X11 | Self::Wayland => Ueberzug::image_erase(area),
 			Self::Chafa => Chafa::image_erase(area),
@@ -76,16 +76,21 @@ impl Adapter {
 
 	#[inline]
 	pub(super) fn needs_ueberzug(self) -> bool {
-		!matches!(self, Self::Kitty | Self::KittyOld | Self::Iterm2 | Self::Sixel)
+		!matches!(self, Self::Kitty | Self::KittyOld | Self::Iip | Self::Sixel)
 	}
 }
 
 impl Adapter {
 	pub fn matches() -> Self {
-		let mut protocols = Emulator::detect().adapters();
-
+		let emulator = Emulator::detect();
 		#[cfg(windows)]
-		protocols.retain(|p| *p == Self::Iterm2);
+		if matches!(emulator, Emulator::Microsoft) {
+			return Self::Sixel;
+		}
+
+		let mut protocols = emulator.adapters();
+		#[cfg(windows)]
+		protocols.retain(|p| *p == Self::Iip);
 		if env_exists("ZELLIJ_SESSION_NAME") {
 			protocols.retain(|p| *p == Self::Sixel);
 		} else if *TMUX {
@@ -95,18 +100,20 @@ impl Adapter {
 			return *p;
 		}
 
+		let supported_compositor = Ueberzug::supported_compositor();
 		match env::var("XDG_SESSION_TYPE").unwrap_or_default().as_str() {
 			"x11" => return Self::X11,
-			"wayland" => return Self::Wayland,
+			"wayland" if supported_compositor => return Self::Wayland,
+			"wayland" if !supported_compositor => warn!("[Adapter] Unsupported Wayland compositor"),
 			_ => warn!("[Adapter] Could not identify XDG_SESSION_TYPE"),
 		}
-		if env_exists("WAYLAND_DISPLAY") {
+		if supported_compositor && env_exists("WAYLAND_DISPLAY") {
 			return Self::Wayland;
 		}
 		if env_exists("DISPLAY") {
 			return Self::X11;
 		}
-		if std::fs::symlink_metadata("/proc/sys/fs/binfmt_misc/WSLInterop").is_ok() {
+		if *WSL {
 			return Self::KittyOld;
 		}
 

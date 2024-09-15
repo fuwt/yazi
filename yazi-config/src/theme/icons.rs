@@ -43,12 +43,12 @@ impl Icons {
 
 	#[inline]
 	fn match_by_glob(&self, file: &File) -> Option<&Icon> {
-		self.globs.iter().find(|(p, _)| p.match_path(&file.url, file.is_dir())).map(|(_, i)| i)
+		self.globs.iter().find(|(p, _)| p.match_path(file.url(), file.is_dir())).map(|(_, i)| i)
 	}
 
 	#[inline]
 	fn match_by_name(&self, file: &File) -> Option<&Icon> {
-		let name = file.name()?.to_str()?;
+		let name = file.name().to_str()?;
 		if file.is_dir() {
 			self.dirs.get(name).or_else(|| self.dirs.get(&name.to_ascii_lowercase()))
 		} else {
@@ -56,8 +56,14 @@ impl Icons {
 				.files
 				.get(name)
 				.or_else(|| self.files.get(&name.to_ascii_lowercase()))
-				.or_else(|| self.exts.get(file.url.extension()?.to_str()?))
+				.or_else(|| self.match_by_ext(file))
 		}
+	}
+
+	#[inline]
+	fn match_by_ext(&self, file: &File) -> Option<&Icon> {
+		let ext = file.url().extension()?.to_str()?;
+		self.exts.get(ext).or_else(|| self.exts.get(&ext.to_ascii_lowercase()))
 	}
 }
 
@@ -124,36 +130,26 @@ impl<'de> Deserialize<'de> for Icons {
 			fg_light: Option<Color>,
 		}
 
-		let mut shadow = Shadow::deserialize(deserializer)?;
-		Preset::mix(&mut shadow.globs, shadow.prepend_globs, shadow.append_globs);
-		Preset::mix(&mut shadow.dirs, shadow.prepend_dirs, shadow.append_dirs);
-		Preset::mix(&mut shadow.files, shadow.prepend_files, shadow.append_files);
-		Preset::mix(&mut shadow.exts, shadow.prepend_exts, shadow.append_exts);
-		Preset::mix(&mut shadow.conds, shadow.prepend_conds, shadow.append_conds);
+		let shadow = Shadow::deserialize(deserializer)?;
 
-		let globs = shadow
-			.globs
-			.into_iter()
+		let globs = Preset::mix(shadow.globs, shadow.prepend_globs, shadow.append_globs)
 			.map(|v| {
 				(v.name, Icon { text: v.text, style: Style { fg: v.fg_dark, ..Default::default() } })
 			})
 			.collect();
 
-		let conds = shadow
-			.conds
-			.into_iter()
+		let conds = Preset::mix(shadow.conds, shadow.prepend_conds, shadow.append_conds)
 			.map(|v| {
 				(v.if_, Icon { text: v.text, style: Style { fg: v.fg_dark, ..Default::default() } })
 			})
 			.collect();
 
-		fn as_map(v: Vec<ShadowStr>) -> HashMap<String, Icon> {
-			let mut map = HashMap::with_capacity(v.len());
-			for item in v {
-				map.entry(item.name).or_insert(Icon {
-					text:  item.text,
-					style: Style { fg: item.fg_dark, ..Default::default() },
-				});
+		fn as_map(it: impl Iterator<Item = ShadowStr>) -> HashMap<String, Icon> {
+			let mut map = HashMap::with_capacity(it.size_hint().0);
+			for v in it {
+				map
+					.entry(v.name)
+					.or_insert(Icon { text: v.text, style: Style { fg: v.fg_dark, ..Default::default() } });
 			}
 			map.shrink_to_fit();
 			map
@@ -161,9 +157,9 @@ impl<'de> Deserialize<'de> for Icons {
 
 		Ok(Self {
 			globs,
-			dirs: as_map(shadow.dirs),
-			files: as_map(shadow.files),
-			exts: as_map(shadow.exts),
+			dirs: as_map(Preset::mix(shadow.dirs, shadow.prepend_dirs, shadow.append_dirs)),
+			files: as_map(Preset::mix(shadow.files, shadow.prepend_files, shadow.append_files)),
+			exts: as_map(Preset::mix(shadow.exts, shadow.prepend_exts, shadow.append_exts)),
 			conds,
 		})
 	}

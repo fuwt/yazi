@@ -30,7 +30,7 @@ impl Prework {
 	pub async fn work(&self, op: PreworkOp) -> Result<()> {
 		match op {
 			PreworkOp::Fetch(task) => {
-				let urls: Vec<_> = task.targets.iter().map(|f| f.url()).collect();
+				let urls: Vec<_> = task.targets.iter().map(|f| f.url_owned()).collect();
 				let result = isolate::fetch(&task.plugin.name, task.targets).await;
 				if let Err(e) = result {
 					self.fail(
@@ -52,16 +52,16 @@ impl Prework {
 						urls.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n")
 					);
 				}
-				if code >> 1 & 1 != 0 {
+				if code & 2 != 0 {
 					let mut loaded = self.loaded.lock();
 					for url in urls {
-						loaded.get_mut(&url).map(|x| *x ^= 1 << task.plugin.id);
+						loaded.get_mut(&url).map(|x| *x &= !(1 << task.plugin.id));
 					}
 				}
 				self.prog.send(TaskProg::Adv(task.id, 1, 0))?;
 			}
 			PreworkOp::Load(task) => {
-				let url = task.target.url();
+				let url = task.target.url_owned();
 				let result = isolate::preload(&task.plugin.name, task.target).await;
 				if let Err(e) = result {
 					self.fail(
@@ -75,9 +75,9 @@ impl Prework {
 				if code & 1 == 0 {
 					error!("Returned {code} when running preloader `{}` with `{url}`", task.plugin.name);
 				}
-				if code >> 1 & 1 != 0 {
+				if code & 2 != 0 {
 					let mut loaded = self.loaded.lock();
-					loaded.get_mut(&url).map(|x| *x ^= 1 << task.plugin.id);
+					loaded.get_mut(&url).map(|x| *x &= !(1 << task.plugin.id));
 				}
 				self.prog.send(TaskProg::Adv(task.id, 1, 0))?;
 			}

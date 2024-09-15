@@ -29,6 +29,11 @@ impl Plugin {
 		})
 	}
 
+	#[inline]
+	pub fn fetchers_mask(&self) -> u32 {
+		self.fetchers.iter().fold(0, |n, f| if f.mime.is_some() { n } else { n | 1 << f.idx as u32 })
+	}
+
 	pub fn preloaders<'a>(
 		&'a self,
 		path: &'a Path,
@@ -48,6 +53,7 @@ impl Plugin {
 		self.previewers.iter().find(|&p| p.matches(path, mime))
 	}
 }
+
 impl FromStr for Plugin {
 	type Err = toml::de::Error;
 
@@ -86,9 +92,12 @@ impl FromStr for Plugin {
 			shadow.previewers.retain(|r| !r.any_dir());
 		}
 
-		Preset::mix(&mut shadow.fetchers, shadow.prepend_fetchers, shadow.append_fetchers);
-		Preset::mix(&mut shadow.preloaders, shadow.prepend_preloaders, shadow.append_preloaders);
-		Preset::mix(&mut shadow.previewers, shadow.prepend_previewers, shadow.append_previewers);
+		shadow.fetchers =
+			Preset::mix(shadow.fetchers, shadow.prepend_fetchers, shadow.append_fetchers).collect();
+		shadow.preloaders =
+			Preset::mix(shadow.preloaders, shadow.prepend_preloaders, shadow.append_preloaders).collect();
+		shadow.previewers =
+			Preset::mix(shadow.previewers, shadow.prepend_previewers, shadow.append_previewers).collect();
 
 		if shadow.fetchers.len() + shadow.preloaders.len() > MAX_PREWORKERS as usize {
 			panic!("Fetchers and preloaders exceed the limit of {MAX_PREWORKERS}");

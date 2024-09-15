@@ -27,7 +27,7 @@ impl Manager {
 		if !self.active_mut().try_escape_visual() {
 			return;
 		}
-		let Some(hovered) = self.hovered().map(|h| h.url()) else {
+		let Some(hovered) = self.hovered().map(|h| h.url_owned()) else {
 			return;
 		};
 
@@ -41,7 +41,7 @@ impl Manager {
 
 		let (mut done, mut todo) = (Vec::with_capacity(selected.len()), vec![]);
 		for u in selected {
-			if self.mimetype.contains_key(u) {
+			if self.mimetype.contains(u) {
 				done.push((u.clone(), String::new()));
 			} else if self.guess_folder(u) {
 				done.push((u.clone(), MIME_DIR.to_owned()));
@@ -63,7 +63,7 @@ impl Manager {
 				}
 			}
 
-			done.extend(files.iter().map(|f| (f.url(), String::new())));
+			done.extend(files.iter().map(|f| (f.url_owned(), String::new())));
 			if let Err(e) = isolate::fetch("mime", files).await {
 				error!("Fetch `mime` failed in opening: {e}");
 			}
@@ -78,7 +78,7 @@ impl Manager {
 			.targets
 			.into_iter()
 			.filter_map(|(u, m)| {
-				Some(m).filter(|m| !m.is_empty()).or_else(|| self.mimetype.get(&u).cloned()).map(|m| (u, m))
+				Some(m).filter(|m| !m.is_empty()).or_else(|| self.mimetype.get_owned(&u)).map(|m| (u, m))
 			})
 			.collect();
 
@@ -111,7 +111,7 @@ impl Manager {
 
 		let find = |folder: Option<&Folder>| {
 			folder.is_some_and(|folder| {
-				folder.cwd == p && folder.files.iter().any(|f| f.is_dir() && f.url == *url)
+				p == *folder.loc && folder.files.iter().any(|f| f.is_dir() && url == f.url())
 			})
 		};
 

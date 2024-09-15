@@ -1,6 +1,7 @@
 use std::ops::Deref;
 
 use mlua::{AnyUserData, Lua, UserDataFields, UserDataMethods};
+use yazi_plugin::url::UrlRef;
 
 use super::{Config, Finder, Folder, Mode, Preview, Selected, SCOPE};
 
@@ -23,15 +24,7 @@ impl Tab {
 	pub(super) fn register(lua: &Lua) -> mlua::Result<()> {
 		lua.register_userdata_type::<Self>(|reg| {
 			reg.add_method("name", |lua, me, ()| {
-				Some(
-					lua.create_string(
-						me.current
-							.cwd
-							.file_name()
-							.map_or(me.current.cwd.as_os_str().as_encoded_bytes(), |n| n.as_encoded_bytes()),
-					),
-				)
-				.transpose()
+				Some(lua.create_string(me.current.loc.name().as_encoded_bytes())).transpose()
 			});
 
 			reg.add_field_method_get("mode", |_, me| Mode::make(&me.mode));
@@ -41,6 +34,9 @@ impl Tab {
 				me.parent.as_ref().map(|f| Folder::make(None, f, me)).transpose()
 			});
 
+			reg.add_method("history", |_, me, url: UrlRef| {
+				me.history.get(&url).map(|f| Folder::make(None, f, me)).transpose()
+			});
 			reg.add_field_method_get("selected", |_, me| Selected::make(&me.selected));
 
 			reg.add_field_method_get("preview", |_, me| Preview::make(me));
